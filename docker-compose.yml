@@ -1,0 +1,16 @@
+services:
+  aria:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aria-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
