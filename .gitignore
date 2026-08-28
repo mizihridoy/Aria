@@ -24,3 +24,9 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Windows shortcuts
+*.lnk
+
+# One-time scripts
+push-to-github.bat
