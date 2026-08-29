@@ -6,7 +6,7 @@ Aria is a modern, context-aware AI agent built from scratch for Discord communit
 
 ## ✨ Features
 
-* **Provider-Agnostic AI Engine**: Powered by Google Gemini 2.0 Flash with automatic fallback to Groq (Llama 3.3). Easily extensible to other models and providers.
+* **Provider-Agnostic AI Engine**: Powered by Google Gemini 3.6 Flash with automatic fallback to Groq (Llama 3.3). Easily extensible to other models and providers.
 * **Autonomous Multi-Step Tool Loops**: Aria can autonomously reason, recall memories, store facts, search server knowledge, and inspect Discord context before formulating a response.
 * **Dynamic Memory System**:
   * **User Memories**: Remembers personal details, gaming profiles (e.g. Clash of Clans IGN, Town Hall level), and conversation preferences.
