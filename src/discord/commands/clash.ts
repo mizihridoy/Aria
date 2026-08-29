@@ -1,19 +1,14 @@
 import {
   SlashCommandBuilder,
   MessageFlags,
-  EmbedBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import type { Command } from '../types/command.js';
 import { ClashManager } from '../../clash/manager.js';
-import { MemoryManager } from '../../memory/manager.js';
 import { createChildLogger } from '../../services/logger.js';
 
 const log = createChildLogger('command-clash');
 
-/**
- * Truncate response safely to stay within Discord's 2000 character limit
- */
 function safeDiscordLength(text: string, maxLen: number = 1950): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen - 4) + '...';
@@ -22,56 +17,8 @@ function safeDiscordLength(text: string, maxLen: number = 1950): string {
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName('clash')
-    .setDescription('Clash of Clans toolkit: Live player/clan stats, meta strategies, hero equipment & guides')
-    // 1. LIVE PLAYER LOOKUP
-    .addSubcommand(sub =>
-      sub
-        .setName('player')
-        .setDescription('Look up live player profile, Town Hall, trophies, hero levels & equipped items')
-        .addStringOption(opt =>
-          opt
-            .setName('tag')
-            .setDescription('Player Tag (e.g. #9V8LLQP). Leave blank if you linked your tag with /clash link')
-            .setRequired(false)
-        )
-    )
-    // 2. LIVE CLAN LOOKUP
-    .addSubcommand(sub =>
-      sub
-        .setName('clan')
-        .setDescription('Look up live clan details, war record, members, and capital stats')
-        .addStringOption(opt =>
-          opt
-            .setName('tag')
-            .setDescription('Clan Tag (e.g. #2PP0JYRYP)')
-            .setRequired(true)
-        )
-    )
-    // 3. LIVE CLAN WAR
-    .addSubcommand(sub =>
-      sub
-        .setName('war')
-        .setDescription('Check live clan war state, scores, stars, and attacks remaining')
-        .addStringOption(opt =>
-          opt
-            .setName('tag')
-            .setDescription('Clan Tag (e.g. #2PP0JYRYP)')
-            .setRequired(true)
-        )
-    )
-    // 4. LINK PLAYER TAG
-    .addSubcommand(sub =>
-      sub
-        .setName('link')
-        .setDescription('Link your Discord account to your Clash of Clans player tag')
-        .addStringOption(opt =>
-          opt
-            .setName('tag')
-            .setDescription('Your Player Tag (e.g. #9V8LLQP)')
-            .setRequired(true)
-        )
-    )
-    // 5. STRATEGY LOOKUP
+    .setDescription('Clash of Clans toolkit: meta strategies, hero equipment & Town Hall guides')
+    // 1. STRATEGY LOOKUP
     .addSubcommand(sub =>
       sub
         .setName('strategy')
@@ -104,7 +51,7 @@ export const command: Command = {
             .setRequired(false)
         )
     )
-    // 6. HERO EQUIPMENT LOOKUP
+    // 2. HERO EQUIPMENT LOOKUP
     .addSubcommand(sub =>
       sub
         .setName('equipment')
@@ -126,11 +73,11 @@ export const command: Command = {
         .addStringOption(opt =>
           opt
             .setName('name')
-            .setDescription('Specific equipment name (e.g. Giant Gauntlet, Fireball, Magic Mirror, Electro Boots, Fire Heart)')
+            .setDescription('Specific equipment name (e.g. Giant Gauntlet, Fireball, Magic Mirror, Electro Boots)')
             .setRequired(false)
         )
     )
-    // 7. HERO PROFILE
+    // 3. HERO PROFILE
     .addSubcommand(sub =>
       sub
         .setName('hero')
@@ -150,7 +97,7 @@ export const command: Command = {
             )
         )
     )
-    // 8. TOWNHALL GUIDE
+    // 4. TOWNHALL GUIDE
     .addSubcommand(sub =>
       sub
         .setName('townhall')
@@ -171,186 +118,7 @@ export const command: Command = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
-      // 1. LIVE PLAYER PROFILE LOOKUP
-      if (subcommand === 'player') {
-        let tag = interaction.options.getString('tag');
-
-        if (!tag) {
-          // Check if user has a linked player tag in memory
-          const memories = await MemoryManager.retrieveRelevantMemories(
-            'linked clash tag player',
-            interaction.guildId || 'DM',
-            interaction.user.id,
-            3
-          );
-          const linkMemory = memories.userMemories.find(m => m.content.includes('tag: #') || m.content.includes('#'));
-          if (linkMemory) {
-            const match = linkMemory.content.match(/#([A-Z0-9]+)/i);
-            if (match) tag = match[0];
-          }
-        }
-
-        if (!tag) {
-          await interaction.editReply({
-            content: '⚠️ Please specify a player tag (e.g. `/clash player tag:#9V8LLQP`) or link your account using `/clash link tag:#TAG`.',
-          });
-          return;
-        }
-
-        const { data: player, error } = await ClashManager.getLivePlayer(tag);
-        if (error || !player) {
-          await interaction.editReply({ content: `❌ **Failed to fetch player:** ${error || 'Unknown error'}` });
-          return;
-        }
-
-        const embed = new EmbedBuilder()
-          .setTitle(`⚔️ ${player.name} (${player.tag})`)
-          .setColor(0xE67E22)
-          .setDescription(`**Town Hall ${player.townHallLevel}** ${player.townHallWeaponLevel ? `(Weapon Lv.${player.townHallWeaponLevel})` : ''} • **Exp Level**: ${player.expLevel}`)
-          .addFields(
-            { name: '🏆 Trophies', value: `${player.trophies.toLocaleString()} *(Best: ${player.bestTrophies.toLocaleString()})*`, inline: true },
-            { name: '⭐ War Stars', value: `${player.warStars.toLocaleString()}`, inline: true },
-            { name: '🛡️ Clan', value: player.clan ? `${player.clan.name} (\`${player.clan.tag}\`)` : 'No Clan', inline: true },
-            { name: '⚔️ Attack Wins', value: `${player.attackWins.toLocaleString()}`, inline: true },
-            { name: '🛡️ Defense Wins', value: `${player.defenseWins.toLocaleString()}`, inline: true },
-            { name: '🎖️ League', value: player.league?.name || 'Unranked', inline: true }
-          );
-
-        if (player.league?.iconUrls?.medium) {
-          embed.setThumbnail(player.league.iconUrls.medium);
-        }
-
-        // List Heroes with Levels and Equipped Gear
-        if (player.heroes && player.heroes.length > 0) {
-          const homeHeroes = player.heroes.filter(h => h.village === 'home');
-          if (homeHeroes.length > 0) {
-            const heroList = homeHeroes.map(h => {
-              const equipStr = h.equipment && h.equipment.length > 0
-                ? ` [${h.equipment.map(e => `${e.name} Lv.${e.level}`).join(', ')}]`
-                : '';
-              return `• **${h.name}**: Lv.${h.level}/${h.maxLevel}${equipStr}`;
-            }).join('\n');
-
-            embed.addFields({ name: '👑 Heroes & Equipped Gear', value: heroList });
-          }
-        }
-
-        await interaction.editReply({ embeds: [embed] });
-        return;
-      }
-
-      // 2. LIVE CLAN LOOKUP
-      if (subcommand === 'clan') {
-        const tag = interaction.options.getString('tag', true);
-        const { data: clan, error } = await ClashManager.getLiveClan(tag);
-
-        if (error || !clan) {
-          await interaction.editReply({ content: `❌ **Failed to fetch clan:** ${error || 'Unknown error'}` });
-          return;
-        }
-
-        const embed = new EmbedBuilder()
-          .setTitle(`🛡️ ${clan.name} (${clan.tag})`)
-          .setColor(0x3498DB)
-          .setDescription(clan.description ? `> ${clan.description.slice(0, 250)}` : 'No description')
-          .addFields(
-            { name: '🏰 Clan Level', value: `Level ${clan.clanLevel}`, inline: true },
-            { name: '👥 Members', value: `${clan.members}/50`, inline: true },
-            { name: '🏆 Clan Points', value: `${clan.clanPoints.toLocaleString()}`, inline: true },
-            { name: '⚔️ War Record', value: `🏆 ${clan.warWins}W / 💀 ${clan.warLosses ?? 0}L (Streak: ${clan.warWinStreak})`, inline: true },
-            { name: '🏛️ Capital Hall', value: `Lv.${clan.capitalHallLevel ?? 'N/A'}`, inline: true },
-            { name: '🎯 Required Trophies', value: `${clan.requiredTrophies.toLocaleString()}`, inline: true }
-          );
-
-        if (clan.badgeUrls?.medium) {
-          embed.setThumbnail(clan.badgeUrls.medium);
-        }
-
-        await interaction.editReply({ embeds: [embed] });
-        return;
-      }
-
-      // 3. LIVE CLAN WAR
-      if (subcommand === 'war') {
-        const tag = interaction.options.getString('tag', true);
-        const { data: war, error } = await ClashManager.getLiveCurrentWar(tag);
-
-        if (error || !war) {
-          await interaction.editReply({ content: `❌ **Failed to fetch war status:** ${error || 'Unknown error'}` });
-          return;
-        }
-
-        if (war.state === 'notInWar') {
-          await interaction.editReply({ content: `ℹ️ Clan \`${tag}\` is currently not in a clan war.` });
-          return;
-        }
-
-        const stateDisplay = war.state === 'inWar'
-          ? '🟢 **Battle Day In Progress**'
-          : war.state === 'preparation'
-            ? '🟡 **Preparation Day**'
-            : '🏁 **War Ended**';
-
-        const embed = new EmbedBuilder()
-          .setTitle(`⚔️ Clan War: ${war.clan?.name || 'Clan'} vs ${war.opponent?.name || 'Opponent'}`)
-          .setColor(war.state === 'inWar' ? 0x2ECC71 : 0xF39C12)
-          .setDescription(stateDisplay)
-          .addFields(
-            {
-              name: `🛡️ ${war.clan?.name || 'Your Clan'}`,
-              value: `⭐ **Stars:** ${war.clan?.stars ?? 0}\n💥 **Destruction:** ${(war.clan?.destructionPercentage ?? 0).toFixed(2)}%\n⚔️ **Attacks Used:** ${war.clan?.attacks ?? 0}/${(war.teamSize ?? 1) * (war.attacksPerMember ?? 2)}`,
-              inline: true,
-            },
-            {
-              name: `⚔️ ${war.opponent?.name || 'Opponent'}`,
-              value: `⭐ **Stars:** ${war.opponent?.stars ?? 0}\n💥 **Destruction:** ${(war.opponent?.destructionPercentage ?? 0).toFixed(2)}%\n⚔️ **Attacks Used:** ${war.opponent?.attacks ?? 0}/${(war.teamSize ?? 1) * (war.attacksPerMember ?? 2)}`,
-              inline: true,
-            },
-            {
-              name: '👥 War Format',
-              value: `${war.teamSize} vs ${war.teamSize} (${war.attacksPerMember} attack(s) each)`,
-              inline: false,
-            }
-          );
-
-        if (war.endTime) {
-          const epoch = Math.floor(new Date(war.endTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2}).*/, '$1-$2-$3T$4:$5:$6Z')).getTime() / 1000);
-          if (!isNaN(epoch)) {
-            embed.addFields({ name: '⏳ End Time', value: `<t:${epoch}:R> (<t:${epoch}:f>)` });
-          }
-        }
-
-        await interaction.editReply({ embeds: [embed] });
-        return;
-      }
-
-      // 4. LINK PLAYER TAG
-      if (subcommand === 'link') {
-        const rawTag = interaction.options.getString('tag', true);
-        const { data: player, error } = await ClashManager.getLivePlayer(rawTag);
-
-        if (error || !player) {
-          await interaction.editReply({
-            content: `⚠️ Could not verify player tag \`${rawTag}\`: ${error || 'Player not found'}. Please make sure the tag is valid.`,
-          });
-          return;
-        }
-
-        await MemoryManager.remember({
-          guildId: interaction.guildId || 'DM',
-          userId: interaction.user.id,
-          content: `Linked Clash of Clans player: ${player.name} (${player.tag}), Town Hall ${player.townHallLevel}`,
-          category: 'identity',
-          metadata: { playerTag: player.tag, playerName: player.name },
-        });
-
-        await interaction.editReply({
-          content: `✅ Successfully linked your Discord account to **${player.name}** (\`${player.tag}\`, TH${player.townHallLevel})! You can now run \`/clash player\` anytime without typing your tag.`,
-        });
-        return;
-      }
-
-      // 5. STRATEGY LOOKUP
+      // 1. STRATEGY LOOKUP
       if (subcommand === 'strategy') {
         const th = interaction.options.getInteger('th') || undefined;
         const archetype = interaction.options.getString('archetype') || undefined;
@@ -410,7 +178,7 @@ export const command: Command = {
         return;
       }
 
-      // 6. HERO EQUIPMENT LOOKUP
+      // 2. HERO EQUIPMENT LOOKUP
       if (subcommand === 'equipment') {
         const hero = interaction.options.getString('hero') || undefined;
         const name = interaction.options.getString('name') || undefined;
@@ -421,8 +189,8 @@ export const command: Command = {
 
 Select a Hero to inspect full equipment stats, ratings, and top synergies:
 
-* **👑 Barbarian King** (8) — \`Giant Gauntlet\`, \`Spiky Ball\`, \`Snake Bracelet\`, \`Stick Horse\`, \`Vampstache\`, etc.
-* **🏹 Archer Queen** (8) — \`Magic Mirror\`, \`Frozen Arrow\`, \`Action Figure\`, \`Monolith Arrow\`, \`Healer Puppet\`, etc.
+* **👑 Barbarian King** (7) — \`Giant Gauntlet\`, \`Spiky Ball\`, \`Snake Bracelet\`, \`Stick Horse\`, \`Barbarian Puppet\`, \`Rage Vial\`, \`Earthquake Boots\`
+* **🏹 Archer Queen** (8) — \`Magic Mirror\`, \`Frozen Arrow\`, \`Action Figure\`, \`Monolith Arrow\`, \`Archer Puppet\`, \`Invisibility Vial\`, \`Giant Arrow\`, \`Healer Puppet\`
 * **👑 Minion Prince** (6) — \`Meteor Staff\`, \`Dark Crown\`, \`Dark Orb\`, \`Henchmen Puppet\`, \`Metal Pants\`, \`Noble Iron\`
 * **✨ Grand Warden** (7) — \`Fireball\`, \`Heroic Torch\`, \`Lavaloon Puppet\`, \`Eternal Tome\`, \`Healing Tome\`, \`Rage Gem\`, \`Life Gem\`
 * **🛡️ Royal Champion** (7) — \`Electro Boots\`, \`Rocket Spear\`, \`Frost Flake\`, \`Haste Vial\`, \`Seeking Shield\`, \`Hog Puppet\`, \`Royal Gem\`
@@ -463,7 +231,7 @@ Select a Hero to inspect full equipment stats, ratings, and top synergies:
         return;
       }
 
-      // 7. HERO PROFILE
+      // 3. HERO PROFILE
       if (subcommand === 'hero') {
         const heroName = interaction.options.getString('name', true);
         const heroEquips = await ClashManager.getHeroEquipment(heroName);
@@ -491,7 +259,7 @@ Select a Hero to inspect full equipment stats, ratings, and top synergies:
 ### 🎯 Meta Equipment Builds
 ${builds}
 
-### 🎒 All Available Equipments (${heroEquips.length})
+### 🎒 All Available Equipment (${heroEquips.length})
 ${equipNames}
 
 💡 *Use \`/clash equipment hero:"${heroName}"\` to see full synergy details for every item!*
@@ -500,7 +268,7 @@ ${equipNames}
         return;
       }
 
-      // 8. TOWNHALL GUIDE
+      // 4. TOWNHALL GUIDE
       if (subcommand === 'townhall') {
         const th = interaction.options.getInteger('th', true);
         const guide = await ClashManager.getTownHallGuide(th);

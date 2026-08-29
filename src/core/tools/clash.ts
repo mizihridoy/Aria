@@ -6,21 +6,20 @@ import { createChildLogger } from '../../services/logger.js';
 const log = createChildLogger('tool-clash');
 
 /**
- * Unified Clash of Clans Meta & Live API Tool
- * Consolidates strategy, equipment, Town Hall guides, and Supercell live player/clan/war lookups.
+ * Unified Clash of Clans Meta Tool
+ * Database-powered strategy, equipment, and Town Hall guide lookups.
  */
 export const clashLookupTool = tool({
-  description: 'Look up Clash of Clans (TH12-TH18) meta strategies, hero equipment synergies, Town Hall guides, OR fetch live player/clan/war statistics from the official Supercell API using a player or clan tag.',
+  description: 'Look up Clash of Clans (TH12-TH18) meta attack strategies, hero equipment synergies (across BK, AQ, GW, RC, Minion Prince, Dragon Duke), or Town Hall upgrade priority guides.',
   parameters: z.object({
-    type: z.enum(['strategy', 'equipment', 'townhall', 'live_player', 'live_clan', 'live_war']).describe('The type of clash information to query'),
+    type: z.enum(['strategy', 'equipment', 'townhall']).describe('The type of clash information to query'),
     town_hall: z.number().int().min(12).max(18).optional().describe('Town Hall level (12 to 18)'),
     hero: z.enum(['Barbarian King', 'Archer Queen', 'Grand Warden', 'Royal Champion', 'Minion Prince', 'Dragon Duke']).optional().describe('Hero name filter for equipment'),
-    name: z.string().optional().describe('Specific strategy or equipment name'),
-    tag: z.string().optional().describe('Player or Clan Tag for live Supercell API query (e.g. "#9V8LLQP", "#2PP0JYRYP")'),
+    name: z.string().optional().describe('Specific strategy or equipment name (e.g. "Hydra", "Root Rider", "Giant Gauntlet", "Fireball", "Magic Mirror", "Electro Boots", "Fire Heart", "Meteor Staff")'),
   }),
-  execute: async ({ type, town_hall, hero, name, tag }) => {
+  execute: async ({ type, town_hall, hero, name }) => {
     try {
-      log.info({ type, town_hall, hero, name, tag }, 'Executing unified clash lookup');
+      log.info({ type, town_hall, hero, name }, 'Executing clash lookup');
 
       // 1. STRATEGY LOOKUP
       if (type === 'strategy') {
@@ -91,72 +90,10 @@ export const clashLookupTool = tool({
         };
       }
 
-      // 4. LIVE SUPERCELL PLAYER PROFILE
-      if (type === 'live_player' && tag) {
-        const { data: player, error } = await ClashManager.getLivePlayer(tag);
-        if (error || !player) {
-          return { type: 'live_player', found: 0, error: error || 'Player not found.' };
-        }
-        return {
-          type: 'live_player',
-          found: 1,
-          player: {
-            name: player.name,
-            tag: player.tag,
-            th: player.townHallLevel,
-            trophies: player.trophies,
-            warStars: player.warStars,
-            clan: player.clan ? `${player.clan.name} (${player.clan.tag})` : 'None',
-            heroes: player.heroes.filter(h => h.village === 'home').map(h => ({
-              hero: h.name,
-              level: `${h.level}/${h.maxLevel}`,
-              gear: h.equipment?.map(e => `${e.name} (Lv.${e.level})`),
-            })),
-          },
-        };
-      }
-
-      // 5. LIVE SUPERCELL CLAN
-      if (type === 'live_clan' && tag) {
-        const { data: clan, error } = await ClashManager.getLiveClan(tag);
-        if (error || !clan) {
-          return { type: 'live_clan', found: 0, error: error || 'Clan not found.' };
-        }
-        return {
-          type: 'live_clan',
-          found: 1,
-          clan: {
-            name: clan.name,
-            tag: clan.tag,
-            level: clan.clanLevel,
-            members: `${clan.members}/50`,
-            points: clan.clanPoints,
-            warWins: clan.warWins,
-            warLosses: clan.warLosses,
-            streak: clan.warWinStreak,
-            capitalHall: clan.capitalHallLevel,
-          },
-        };
-      }
-
-      // 6. LIVE SUPERCELL CLAN WAR
-      if (type === 'live_war' && tag) {
-        const { data: war, error } = await ClashManager.getLiveCurrentWar(tag);
-        if (error || !war) {
-          return { type: 'live_war', found: 0, error: error || 'War data not found.' };
-        }
-        return {
-          type: 'live_war',
-          state: war.state,
-          clan: { name: war.clan?.name, stars: war.clan?.stars, destruction: war.clan?.destructionPercentage, attacks: war.clan?.attacks },
-          opponent: { name: war.opponent?.name, stars: war.opponent?.stars, destruction: war.opponent?.destructionPercentage, attacks: war.opponent?.attacks },
-        };
-      }
-
       return { found: 0, message: 'Please specify valid search parameters.' };
     } catch (error) {
-      log.error({ error, type, town_hall, hero, name, tag }, 'Error in clashLookupTool');
-      return { error: 'Clash lookup failed.' };
+      log.error({ error, type, town_hall, hero, name }, 'Error in clashLookupTool');
+      return { error: 'Database query failed.' };
     }
   },
 });
